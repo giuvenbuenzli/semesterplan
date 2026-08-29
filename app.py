@@ -173,12 +173,20 @@ def get_subject_name(data, subject_id):
 
 
 def save_current_data():
-    """Speichert den aktuellen Stand und lädt danach die neue SHA."""
+    """Speichert den aktuellen Stand im GitHub-Repository."""
 
-    if save_data(st.session_state.data, st.session_state.file_sha):
-        _, new_sha = load_data()
-        st.session_state.file_sha = new_sha
-        st.session_state.saved = True
+    success = save_data(
+        st.session_state.data,
+        st.session_state.file_sha
+    )
+
+    if success:
+        try:
+            _, new_sha = load_data()
+            st.session_state.file_sha = new_sha
+            st.session_state.saved = True
+        except Exception:
+            st.session_state.saved = False
 
 
 def add_days(start_date, days):
