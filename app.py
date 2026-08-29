@@ -612,293 +612,329 @@ with tab_plan:
         key="planning_date",
     )
 
-    monday = selected_date - timedelta(days=selected_date.weekday())
+    monday = selected_date - timedelta(
+        days=selected_date.weekday()
+    )
+
     sunday = monday + timedelta(days=6)
 
+    # Monats-/Wochenanzeige
     st.write(
-        f"**{monday.strftime('%d.%m.%Y')} – {sunday.strftime('%d.%m.%Y')}**"
+        f"**{monday.strftime('%d.%m.%Y')} – "
+        f"{sunday.strftime('%d.%m.%Y')}**"
     )
 
     st.divider()
 
     # --------------------------------------------------------
-    # Nicht verfügbare Zeit hinzufügen
+    # Lernzeit hinzufügen
     # --------------------------------------------------------
 
-    st.subheader("🚫 Zeit blockieren")
+    st.subheader("➕ Lernzeit einplanen")
 
-    with st.form("add_blocked"):
+    with st.form("add_study_session"):
 
-        col1, col2, col3 = st.columns([2, 1, 1])
+        col1, col2 = st.columns(2)
 
         with col1:
-            blocked_date = st.date_input(
+
+            study_date = st.date_input(
                 "Datum",
                 value=selected_date,
-                key="blocked_date"
+                key="study_date_planning",
+            )
+
+            start_time = st.time_input(
+                "Start",
+                value=time(16, 0),
+                key="study_start_planning",
+                step=1800,
             )
 
         with col2:
-            blocked_start = st.time_input(
-                "Von",
-                value=time(18, 0),
-                key="blocked_start"
+
+            end_time = st.time_input(
+                "Ende",
+                value=time(17, 0),
+                key="study_end_planning",
+                step=1800,
             )
 
-        with col3:
-            blocked_end = st.time_input(
-                "Bis",
-                value=time(22, 0),
-                key="blocked_end"
-            )
+            subject_options = {
+                subject["name"]: subject["id"]
+                for subject in data["subjects"]
+            }
 
-        blocked_description = st.text_input(
-            "Grund",
-            placeholder="z. B. Sport, Arbeit, Termin, Freizeit ..."
+            if subject_options:
+
+                selected_subject_name = st.selectbox(
+                    "Fach",
+                    list(subject_options.keys()),
+                    key="study_subject_planning",
+                )
+
+            else:
+                selected_subject_name = None
+
+        session_description = st.text_input(
+            "Was möchtest du machen?",
+            placeholder="z. B. Kapitel 3 lernen",
+            key="study_description_planning",
         )
 
-        blocked_submitted = st.form_submit_button(
-            "Zeit blockieren",
-            use_container_width=True
+        submitted = st.form_submit_button(
+            "Lernzeit hinzufügen",
+            use_container_width=True,
         )
 
-        if blocked_submitted:
+        if submitted:
 
-            if blocked_end <= blocked_start:
-                st.error("Die Endzeit muss nach der Startzeit liegen.")
+            if not subject_options:
+
+                st.error(
+                    "Bitte zuerst mindestens ein Fach anlegen."
+                )
+
+            elif end_time <= start_time:
+
+                st.error(
+                    "Die Endzeit muss nach der Startzeit liegen."
+                )
+
+            elif not session_description.strip():
+
+                st.error(
+                    "Bitte eine Beschreibung eingeben."
+                )
 
             else:
 
-                # Prüfen, ob sich die neue Sperrzeit überschneidet
+                # Minuten seit Mitternacht
                 new_start = (
-                    blocked_start.hour * 60
-                    + blocked_start.minute
+                    start_time.hour * 60
+                    + start_time.minute
                 )
 
                 new_end = (
-                    blocked_end.hour * 60
-                    + blocked_end.minute
+                    end_time.hour * 60
+                    + end_time.minute
                 )
 
-                overlapping = False
+                # ------------------------------------------------
+                # Prüfen: blockierte Zeit
+                # ------------------------------------------------
+
+                blocked_overlap = None
 
                 for blocked in data["blocked_times"]:
 
-                    if blocked["date"] != blocked_date.isoformat():
+                    if blocked["date"] != study_date.isoformat():
                         continue
 
-                    old_start_hour, old_start_minute = map(
+                    blocked_start_hour, blocked_start_minute = map(
                         int,
                         blocked["start"].split(":")
                     )
 
-                    old_end_hour, old_end_minute = map(
+                    blocked_end_hour, blocked_end_minute = map(
                         int,
                         blocked["end"].split(":")
                     )
 
-                    old_start = old_start_hour * 60 + old_start_minute
-                    old_end = old_end_hour * 60 + old_end_minute
+                    blocked_start = (
+                        blocked_start_hour * 60
+                        + blocked_start_minute
+                    )
 
-                    if new_start < old_end and new_end > old_start:
-                        overlapping = True
+                    blocked_end = (
+                        blocked_end_hour * 60
+                        + blocked_end_minute
+                    )
+
+                    # Überschneidung?
+                    if (
+                        new_start < blocked_end
+                        and new_end > blocked_start
+                    ):
+                        blocked_overlap = blocked
                         break
 
-                if overlapping:
+                if blocked_overlap:
+
                     st.error(
-                        "Diese Zeit überschneidet sich bereits "
-                        "mit einer blockierten Zeit."
+                        f"Die Lernzeit überschneidet sich mit "
+                        f"einer blockierten Zeit: "
+                        f"{blocked_overlap['start']}–"
+                        f"{blocked_overlap['end']}"
+                        + (
+                            f" ({blocked_overlap['description']})"
+                            if blocked_overlap.get("description")
+                            else ""
+                        )
                     )
 
                 else:
 
-                    blocked = {
+                    # --------------------------------------------
+                    # Neue Lernzeit
+                    # --------------------------------------------
+
+                    session = {
                         "id": generate_id(),
-                        "date": blocked_date.isoformat(),
-                        "start": blocked_start.strftime("%H:%M"),
-                        "end": blocked_end.strftime("%H:%M"),
-                        "description": blocked_description,
+                        "date": study_date.isoformat(),
+                        "start": start_time.strftime("%H:%M"),
+                        "end": end_time.strftime("%H:%M"),
+                        "subject_id": subject_options[
+                            selected_subject_name
+                        ],
+                        "description": session_description,
                     }
 
-                    data["blocked_times"].append(blocked)
+                    data["study_sessions"].append(session)
 
                     save_current_data()
+
                     st.rerun()
 
     st.divider()
 
     # --------------------------------------------------------
-    # Wochenkalender
+    # Kalender
     # --------------------------------------------------------
 
     st.subheader("📅 Wochenkalender")
 
-    # CSS für Kalender
-    st.markdown(
-        """
-        <style>
-        .calendar-grid {
-            display: grid;
-            grid-template-columns: 65px repeat(7, 1fr);
-            border-left: 1px solid #cccccc;
-            border-top: 1px solid #cccccc;
-            overflow: hidden;
-        }
-
-        .calendar-header {
-            min-height: 45px;
-            padding: 8px 4px;
-            text-align: center;
-            font-weight: bold;
-            background: #f5f5f5;
-            border-right: 1px solid #cccccc;
-            border-bottom: 1px solid #cccccc;
-        }
-
-        .calendar-time {
-            height: 30px;
-            padding-right: 6px;
-            text-align: right;
-            font-size: 11px;
-            color: #777777;
-            border-right: 1px solid #cccccc;
-            border-bottom: 1px solid #e5e5e5;
-        }
-
-        .calendar-cell {
-            height: 30px;
-            border-right: 1px solid #dddddd;
-            border-bottom: 1px solid #e5e5e5;
-            position: relative;
-            font-size: 11px;
-            padding: 2px;
-        }
-
-        .calendar-cell-half {
-            border-bottom: 1px dotted #eeeeee;
-        }
-
-        .calendar-blocked {
-            background: #eeeeee;
-        }
-
-        .calendar-session {
-            background: #dff2df;
-            border-radius: 4px;
-            padding: 2px 4px;
-            margin: 1px;
-            overflow: hidden;
-        }
-
-        .calendar-exam {
-            background: #ffe0e0;
-            border-radius: 4px;
-            padding: 2px 4px;
-            margin: 1px;
-            overflow: hidden;
-        }
-
-        .calendar-today {
-            background: #fff8e1;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+    day_names = [
+        "Montag",
+        "Dienstag",
+        "Mittwoch",
+        "Donnerstag",
+        "Freitag",
+        "Samstag",
+        "Sonntag",
+    ]
 
     # --------------------------------------------------------
-    # Kalender-HTML erzeugen
+    # Kopfzeile
     # --------------------------------------------------------
 
-    html = '<div class="calendar-grid">'
+    header_cols = st.columns([0.7, 1, 1, 1, 1, 1, 1, 1])
 
-    # Ecke oben links
-    html += '<div class="calendar-header">Zeit</div>'
+    with header_cols[0]:
+        st.markdown("**Zeit**")
 
-    # Wochentage
-    for day_offset in range(7):
+    for i in range(7):
 
-        current_day = monday + timedelta(days=day_offset)
+        current_day = monday + timedelta(days=i)
 
-        day_names = [
-            "Montag",
-            "Dienstag",
-            "Mittwoch",
-            "Donnerstag",
-            "Freitag",
-            "Samstag",
-            "Sonntag"
-        ]
+        with header_cols[i + 1]:
 
-        today_class = (
-            " calendar-today"
-            if current_day == today
-            else ""
-        )
-
-        html += (
-            f'<div class="calendar-header{today_class}">'
-            f'{day_names[day_offset]}<br>'
-            f'{current_day.strftime("%d.%m.")}'
-            f'</div>'
-        )
+            if current_day == today:
+                st.markdown(
+                    f"**{day_names[i]}**  \n"
+                    f"**{current_day.strftime('%d.%m.')}**"
+                )
+            else:
+                st.markdown(
+                    f"**{day_names[i]}**  \n"
+                    f"{current_day.strftime('%d.%m.')}"
+                )
 
     # --------------------------------------------------------
-    # 48 Halb-Stunden-Zeilen
+    # Kalenderzeilen
     # --------------------------------------------------------
 
     for half_hour in range(48):
 
         minutes = half_hour * 30
+
         hour = minutes // 60
         minute = minutes % 60
 
-        # Zeit links
-        time_label = f"{hour:02d}:{minute:02d}"
+        time_text = f"{hour:02d}:{minute:02d}"
 
-        html += (
-            f'<div class="calendar-time">'
-            f'{time_label}'
-            f'</div>'
+        row_cols = st.columns(
+            [0.7, 1, 1, 1, 1, 1, 1, 1]
         )
 
-        # Jeder Wochentag
-        for day_offset in range(7):
+        # --------------------------------------------
+        # Zeit links
+        # --------------------------------------------
 
-            current_day = monday + timedelta(days=day_offset)
+        with row_cols[0]:
+
+            st.markdown(
+                f"""
+                <div style="
+                    height:29px;
+                    border-bottom:1px solid #dddddd;
+                    text-align:right;
+                    padding-right:6px;
+                    font-size:11px;
+                    color:#777;
+                ">
+                    {time_text}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        # --------------------------------------------
+        # Die 7 Tage
+        # --------------------------------------------
+
+        for day_index in range(7):
+
+            current_day = monday + timedelta(
+                days=day_index
+            )
 
             cell_start = minutes
             cell_end = minutes + 30
 
-            # Prüfen, ob die Zelle blockiert ist
-            is_blocked = False
-            blocked_text = ""
+            # ----------------------------------------
+            # Blockierte Zeit prüfen
+            # ----------------------------------------
 
-            for blocked in data["blocked_times"]:
+            blocked = None
 
-                if blocked["date"] != current_day.isoformat():
+            for item in data["blocked_times"]:
+
+                if item["date"] != current_day.isoformat():
                     continue
 
                 start_hour, start_minute = map(
                     int,
-                    blocked["start"].split(":")
+                    item["start"].split(":")
                 )
 
                 end_hour, end_minute = map(
                     int,
-                    blocked["end"].split(":")
+                    item["end"].split(":")
                 )
 
-                blocked_start = start_hour * 60 + start_minute
-                blocked_end = end_hour * 60 + end_minute
+                blocked_start = (
+                    start_hour * 60
+                    + start_minute
+                )
 
-                if cell_start < blocked_end and cell_end > blocked_start:
-                    is_blocked = True
-                    blocked_text = blocked.get("description", "Blockiert")
+                blocked_end = (
+                    end_hour * 60
+                    + end_minute
+                )
+
+                if (
+                    cell_start < blocked_end
+                    and cell_end > blocked_start
+                ):
+                    blocked = item
                     break
 
+            # ----------------------------------------
             # Lernzeiten
-            sessions_html = ""
+            # ----------------------------------------
+
+            sessions = []
 
             for session in data["study_sessions"]:
 
@@ -915,73 +951,104 @@ with tab_plan:
                     session["end"].split(":")
                 )
 
-                session_start = start_hour * 60 + start_minute
-                session_end = end_hour * 60 + end_minute
-
-                if cell_start < session_end and cell_end > session_start:
-
-                    sessions_html += (
-                        '<div class="calendar-session">'
-                        f'<b>{session["start"]}–{session["end"]}</b><br>'
-                        f'{get_subject_name(data, session["subject_id"])}'
-                        f'<br>{session["description"]}'
-                        '</div>'
-                    )
-
-            # Prüfungen
-            exams_html = ""
-
-            for exam in data["exams"]:
-
-                if exam["date"] != current_day.isoformat():
-                    continue
-
-                exam_hour, exam_minute = map(
-                    int,
-                    exam.get("time", "00:00").split(":")
+                session_start = (
+                    start_hour * 60
+                    + start_minute
                 )
 
-                exam_start = exam_hour * 60 + exam_minute
-                exam_end = exam_start + int(
-                    exam.get("duration_minutes", 60)
+                session_end = (
+                    end_hour * 60
+                    + end_minute
                 )
 
-                if cell_start < exam_end and cell_end > exam_start:
+                if (
+                    cell_start < session_end
+                    and cell_end > session_start
+                ):
+                    sessions.append(session)
 
-                    exams_html += (
-                        '<div class="calendar-exam">'
-                        f'📝 {exam["name"]}'
-                        '</div>'
-                    )
+            # ----------------------------------------
+            # Zelleninhalt
+            # ----------------------------------------
 
-            # Zelle
-            classes = "calendar-cell"
+            cell_content = ""
 
-            if is_blocked:
-                classes += " calendar-blocked"
+            if blocked:
 
-            if current_day == today:
-                classes += " calendar-today"
+                description = blocked.get(
+                    "description",
+                    "Nicht verfügbar"
+                )
 
-            title = (
-                f' title="{blocked_text}"'
-                if is_blocked and blocked_text
-                else ""
+                cell_content = (
+                    f"<span style='"
+                    f"font-size:10px;"
+                    f"color:#666;"
+                    f"'>"
+                    f"🚫 {description}"
+                    f"</span>"
+                )
+
+            for session in sessions:
+
+                subject_name = get_subject_name(
+                    data,
+                    session["subject_id"]
+                )
+
+                cell_content += (
+                    "<div style='"
+                    "background:#dff2df;"
+                    "border-radius:4px;"
+                    "padding:2px 4px;"
+                    "font-size:10px;"
+                    "margin:1px 0;"
+                    "'>"
+                    f"<b>{subject_name}</b><br>"
+                    f"{session['description']}"
+                    "</div>"
+                )
+
+            # ----------------------------------------
+            # Hintergrund
+            # ----------------------------------------
+
+            if blocked:
+                background = "#eeeeee"
+
+            elif current_day == today:
+                background = "#fff8e1"
+
+            else:
+                background = "transparent"
+
+            # ----------------------------------------
+            # Horizontale Linie
+            # ----------------------------------------
+
+            border_style = (
+                "1px solid #cccccc"
+                if minute == 0
+                else "1px dotted #e5e5e5"
             )
 
-            html += (
-                f'<div class="{classes}"{title}>'
-                f'{sessions_html}'
-                f'{exams_html}'
-                f'</div>'
-            )
+            with row_cols[day_index + 1]:
 
-    html += "</div>"
-
-    st.markdown(
-        html,
-        unsafe_allow_html=True
-    )
+                st.markdown(
+                    f"""
+                    <div style="
+                        height:29px;
+                        background:{background};
+                        border-bottom:{border_style};
+                        border-left:1px solid #eeeeee;
+                        padding:1px 2px;
+                        overflow:hidden;
+                    ">
+                        {cell_content}
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
     st.divider()
 
@@ -1000,7 +1067,10 @@ with tab_plan:
     ]
 
     week_blocked.sort(
-        key=lambda x: (x["date"], x["start"])
+        key=lambda x: (
+            x["date"],
+            x["start"]
+        )
     )
 
     if week_blocked:
@@ -1011,23 +1081,29 @@ with tab_plan:
                 blocked["date"]
             )
 
-            col1, col2, col3 = st.columns([2, 4, 1])
+            col1, col2, col3 = st.columns(
+                [2, 4, 1]
+            )
 
             with col1:
+
                 st.write(
                     f"**{blocked_date.strftime('%A, %d.%m.%Y')}**"
                 )
 
             with col2:
+
                 st.write(
-                    f"{blocked['start']} – {blocked['end']}  \n"
+                    f"{blocked['start']} – "
+                    f"{blocked['end']}  \n"
                     f"{blocked.get('description', '')}"
                 )
 
             with col3:
+
                 if st.button(
                     "🗑️",
-                    key=f"delete_blocked_{blocked['id']}"
+                    key=f"planning_delete_blocked_{blocked['id']}",
                 ):
 
                     data["blocked_times"] = [
@@ -1037,11 +1113,14 @@ with tab_plan:
                     ]
 
                     save_current_data()
+
                     st.rerun()
 
     else:
-        st.caption("Keine blockierten Zeiten in dieser Woche.")
 
+        st.caption(
+            "Keine blockierten Zeiten in dieser Woche."
+        )
 
 # ============================================================
 # PRÜFUNGEN
