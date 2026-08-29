@@ -377,7 +377,7 @@ with tab_dashboard:
     
     
     # Kalender erstellen
-    cal = calendar.Calendar(firstweekday=0)  # Montag = 0
+    cal = calendar.Calendar(firstweekday=0)
     weeks = cal.monthdatescalendar(
         st.session_state.calendar_year,
         st.session_state.calendar_month
@@ -391,16 +391,11 @@ with tab_dashboard:
     for col, weekday in zip(cols, weekday_names):
         with col:
             st.markdown(
-                f"<div style='text-align:center; font-weight:bold;'>"
-                f"{weekday}"
-                f"</div>",
+                f"<div style='text-align:center;font-weight:bold;margin-bottom:5px;'>{weekday}</div>",
                 unsafe_allow_html=True
             )
     
-    st.divider()
-    
-    
-    # Alle Kalenderwochen
+    # Kalenderwochen
     for week in weeks:
     
         cols = st.columns(7)
@@ -409,7 +404,7 @@ with tab_dashboard:
     
             with col:
     
-                # Ereignisse für diesen Tag
+                # Ereignisse
                 day_exams = [
                     exam for exam in data["exams"]
                     if exam.get("date") == current_day.isoformat()
@@ -426,12 +421,10 @@ with tab_dashboard:
                     if session.get("date") == current_day.isoformat()
                 ]
     
-                # Ist der Tag ausserhalb des aktuellen Monats?
                 outside_month = (
                     current_day.month != st.session_state.calendar_month
                 )
     
-                # Hintergrund für heute
                 is_today = current_day == today
     
                 if is_today:
@@ -444,68 +437,67 @@ with tab_dashboard:
                     border = "1px solid #dddddd"
                     background = "white"
     
-                # Kalenderzelle
-                html = f"""
-                <div style="
-                    border: {border};
-                    background: {background};
-                    border-radius: 8px;
-                    padding: 8px;
-                    min-height: 110px;
-                    margin-bottom: 8px;
-                ">
-                    <div style="
-                        font-weight: bold;
-                        font-size: 16px;
-                        color: {'#999999' if outside_month else '#222222'};
-                        margin-bottom: 5px;
-                    ">
-                        {current_day.day}
-                    </div>
-                """
+                day_color = "#999999" if outside_month else "#222222"
+    
+                # HTML ohne problematische Einrückung
+                html = (
+                    f"<div style='"
+                    f"border:{border};"
+                    f"background:{background};"
+                    f"border-radius:8px;"
+                    f"padding:8px;"
+                    f"min-height:110px;"
+                    f"margin-bottom:8px;"
+                    f"'>"
+                    f"<div style='"
+                    f"font-weight:bold;"
+                    f"font-size:16px;"
+                    f"color:{day_color};"
+                    f"margin-bottom:5px;"
+                    f"'>{current_day.day}</div>"
+                )
     
                 # Prüfungen
                 for exam in day_exams:
-                    html += f"""
-                    <div style="
-                        background: #ffe0e0;
-                        border-radius: 4px;
-                        padding: 3px 5px;
-                        margin: 2px 0;
-                        font-size: 12px;
-                    ">
-                        📝 {exam.get("name", "Prüfung")}
-                    </div>
-                    """
+                    html += (
+                        "<div style='"
+                        "background:#ffe0e0;"
+                        "border-radius:4px;"
+                        "padding:3px 5px;"
+                        "margin:2px 0;"
+                        "font-size:12px;"
+                        "'>"
+                        f"📝 {exam.get('name', 'Prüfung')}"
+                        "</div>"
+                    )
     
                 # Aufgaben
                 for task in day_tasks:
-                    html += f"""
-                    <div style="
-                        background: #fff0c2;
-                        border-radius: 4px;
-                        padding: 3px 5px;
-                        margin: 2px 0;
-                        font-size: 12px;
-                    ">
-                        ✅ {task.get("name", "Aufgabe")}
-                    </div>
-                    """
+                    html += (
+                        "<div style='"
+                        "background:#fff0c2;"
+                        "border-radius:4px;"
+                        "padding:3px 5px;"
+                        "margin:2px 0;"
+                        "font-size:12px;"
+                        "'>"
+                        f"✅ {task.get('name', 'Aufgabe')}"
+                        "</div>"
+                    )
     
                 # Lernzeiten
                 for session in day_sessions:
-                    html += f"""
-                    <div style="
-                        background: #dff2df;
-                        border-radius: 4px;
-                        padding: 3px 5px;
-                        margin: 2px 0;
-                        font-size: 12px;
-                    ">
-                        📚 {session.get("start", "")}–
-                        {session.get("end", "")}
-                    </div>
-                    """
+                    html += (
+                        "<div style='"
+                        "background:#dff2df;"
+                        "border-radius:4px;"
+                        "padding:3px 5px;"
+                        "margin:2px 0;"
+                        "font-size:12px;"
+                        "'>"
+                        f"📚 {session.get('start', '')}–{session.get('end', '')}"
+                        "</div>"
+                    )
     
                 html += "</div>"
     
