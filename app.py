@@ -9,6 +9,31 @@ from github import GithubException
 
 
 # ============================================================
+# Login
+# ============================================================
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    password = st.text_input("Passwort", type="password")
+
+    if st.button("Anmelden"):
+        stored_hash = st.secrets["PASSWORD_HASH"]
+
+        if bcrypt.checkpw(
+            password.encode(),
+            stored_hash.encode()
+        ):
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("Falsches Passwort")
+
+    st.stop()
+
+
+# ============================================================
 # KONFIGURATION
 # ============================================================
 
