@@ -8,6 +8,7 @@ from github import Github
 from github import GithubException
 
 import bcrypt
+import calendar
 
 
 # ============================================================
@@ -325,6 +326,196 @@ with tab_dashboard:
         )
 
     st.divider()
+
+
+    # --------------------------------------------------------
+    # MONATSKALENDER
+    # --------------------------------------------------------
+    
+    st.subheader("📅 Monatskalender")
+    
+    # Monat in Session State speichern
+    if "calendar_year" not in st.session_state:
+        st.session_state.calendar_year = today.year
+    
+    if "calendar_month" not in st.session_state:
+        st.session_state.calendar_month = today.month
+    
+    # Navigation
+    col_prev, col_title, col_next = st.columns([1, 4, 1])
+    
+    with col_prev:
+        if st.button("← Vorheriger Monat", use_container_width=True):
+            if st.session_state.calendar_month == 1:
+                st.session_state.calendar_month = 12
+                st.session_state.calendar_year -= 1
+            else:
+                st.session_state.calendar_month -= 1
+            st.rerun()
+    
+    with col_title:
+        month_name = [
+            "Januar", "Februar", "März", "April", "Mai", "Juni",
+            "Juli", "August", "September", "Oktober", "November", "Dezember"
+        ][st.session_state.calendar_month - 1]
+    
+        st.markdown(
+            f"<h3 style='text-align:center;'>"
+            f"{month_name} {st.session_state.calendar_year}"
+            f"</h3>",
+            unsafe_allow_html=True
+        )
+    
+    with col_next:
+        if st.button("Nächster Monat →", use_container_width=True):
+            if st.session_state.calendar_month == 12:
+                st.session_state.calendar_month = 1
+                st.session_state.calendar_year += 1
+            else:
+                st.session_state.calendar_month += 1
+            st.rerun()
+    
+    
+    # Kalender erstellen
+    cal = calendar.Calendar(firstweekday=0)  # Montag = 0
+    weeks = cal.monthdatescalendar(
+        st.session_state.calendar_year,
+        st.session_state.calendar_month
+    )
+    
+    # Wochentage
+    weekday_names = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
+    
+    cols = st.columns(7)
+    
+    for col, weekday in zip(cols, weekday_names):
+        with col:
+            st.markdown(
+                f"<div style='text-align:center; font-weight:bold;'>"
+                f"{weekday}"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+    
+    st.divider()
+    
+    
+    # Alle Kalenderwochen
+    for week in weeks:
+    
+        cols = st.columns(7)
+    
+        for col, current_day in zip(cols, week):
+    
+            with col:
+    
+                # Ereignisse für diesen Tag
+                day_exams = [
+                    exam for exam in data["exams"]
+                    if exam.get("date") == current_day.isoformat()
+                ]
+    
+                day_tasks = [
+                    task for task in data["tasks"]
+                    if task.get("due_date") == current_day.isoformat()
+                    and task.get("status") != "Erledigt"
+                ]
+    
+                day_sessions = [
+                    session for session in data["study_sessions"]
+                    if session.get("date") == current_day.isoformat()
+                ]
+    
+                # Ist der Tag ausserhalb des aktuellen Monats?
+                outside_month = (
+                    current_day.month != st.session_state.calendar_month
+                )
+    
+                # Hintergrund für heute
+                is_today = current_day == today
+    
+                if is_today:
+                    border = "2px solid #ff4b4b"
+                    background = "#fff5f5"
+                elif outside_month:
+                    border = "1px solid #eeeeee"
+                    background = "#f7f7f7"
+                else:
+                    border = "1px solid #dddddd"
+                    background = "white"
+    
+                # Kalenderzelle
+                html = f"""
+                <div style="
+                    border: {border};
+                    background: {background};
+                    border-radius: 8px;
+                    padding: 8px;
+                    min-height: 110px;
+                    margin-bottom: 8px;
+                ">
+                    <div style="
+                        font-weight: bold;
+                        font-size: 16px;
+                        color: {'#999999' if outside_month else '#222222'};
+                        margin-bottom: 5px;
+                    ">
+                        {current_day.day}
+                    </div>
+                """
+    
+                # Prüfungen
+                for exam in day_exams:
+                    html += f"""
+                    <div style="
+                        background: #ffe0e0;
+                        border-radius: 4px;
+                        padding: 3px 5px;
+                        margin: 2px 0;
+                        font-size: 12px;
+                    ">
+                        📝 {exam.get("name", "Prüfung")}
+                    </div>
+                    """
+    
+                # Aufgaben
+                for task in day_tasks:
+                    html += f"""
+                    <div style="
+                        background: #fff0c2;
+                        border-radius: 4px;
+                        padding: 3px 5px;
+                        margin: 2px 0;
+                        font-size: 12px;
+                    ">
+                        ✅ {task.get("name", "Aufgabe")}
+                    </div>
+                    """
+    
+                # Lernzeiten
+                for session in day_sessions:
+                    html += f"""
+                    <div style="
+                        background: #dff2df;
+                        border-radius: 4px;
+                        padding: 3px 5px;
+                        margin: 2px 0;
+                        font-size: 12px;
+                    ">
+                        📚 {session.get("start", "")}–
+                        {session.get("end", "")}
+                    </div>
+                    """
+    
+                html += "</div>"
+    
+                st.markdown(
+                    html,
+                    unsafe_allow_html=True
+                )
+    
+    st.divider()
+
 
     # --------------------------------------------------------
     # NÄCHSTE PRÜFUNGEN
