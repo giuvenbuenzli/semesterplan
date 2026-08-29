@@ -7,6 +7,8 @@ import streamlit as st
 from github import Github
 from github import GithubException
 
+import bcrypt
+
 
 # ============================================================
 # Login
