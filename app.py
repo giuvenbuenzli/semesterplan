@@ -88,7 +88,6 @@ def default_data():
 
 def load_data():
     """Lädt die JSON-Datei aus dem privaten GitHub-Repository."""
-
     try:
         repo = get_github_repo()
         _, _, file_path, branch = get_github_config()
@@ -101,7 +100,6 @@ def load_data():
         return data, file.sha
 
     except GithubException as e:
-        # Datei existiert noch nicht
         if e.status == 404:
             return default_data(), None
 
@@ -112,9 +110,8 @@ def load_data():
         st.error(f"Fehler beim Laden der Daten: {e}")
         return default_data(), None
 
-
 def save_data(data, file_sha=None):
-    """Speichert die JSON-Datei im privaten GitHub-Repository."""
+    """Speichert die JSON-Datei zuverlässig im privaten GitHub-Repository."""
 
     try:
         repo = get_github_repo()
@@ -143,6 +140,13 @@ def save_data(data, file_sha=None):
             )
 
         return True
+
+    except GithubException as e:
+        st.error(
+            f"GitHub-Fehler beim Speichern: "
+            f"{e.data.get('message', str(e)) if hasattr(e, 'data') else str(e)}"
+        )
+        return False
 
     except Exception as e:
         st.error(f"Fehler beim Speichern auf GitHub: {e}")
@@ -173,21 +177,35 @@ def get_subject_name(data, subject_id):
 
 
 def save_current_data():
-    """Speichert den aktuellen Stand im GitHub-Repository."""
+    """Speichert den aktuellen Stand und lädt ihn anschliessend erneut von GitHub."""
 
     success = save_data(
         st.session_state.data,
         st.session_state.file_sha
     )
 
-    if success:
-        try:
-            _, new_sha = load_data()
-            st.session_state.file_sha = new_sha
-            st.session_state.saved = True
-        except Exception:
-            st.session_state.saved = False
+    if not success:
+        st.session_state.saved = False
+        return False
 
+    try:
+        # Tatsächlich gespeicherte Version von GitHub laden
+        new_data, new_sha = load_data()
+
+        # Session State mit der GitHub-Version aktualisieren
+        st.session_state.data = new_data
+        st.session_state.file_sha = new_sha
+        st.session_state.saved = True
+
+        return True
+
+    except Exception as e:
+        st.session_state.saved = False
+        st.error(
+            f"Die Daten wurden gespeichert, "
+            f"konnten aber nicht erneut geladen werden: {e}"
+        )
+        return False
 
 def add_days(start_date, days):
     return start_date + timedelta(days=days)
@@ -1621,9 +1639,8 @@ with tab_subjects:
 
                 data["subjects"].append(subject)
 
-                save_current_data()
-
-                st.rerun()
+                if save_current_data():
+                    st.rerun()
 
     st.divider()
 
